@@ -1,0 +1,275 @@
+{
+  "api_key": "IVY26-6F996DCC9055",
+  "candidate": {
+    "name": "Viswa Ravindren",
+    "email": "viswaravindren@mnnit.ac.in",
+    "repo_url": "https://github.com/viswahackerlord214/ivy_homes",
+    "demo_url": ""
+  },
+  "answers": {
+    "total_listing_records": 4700,
+    "unique_properties": 4699,
+    "active_listings": 3722,
+    "corrupt_listing_ids": [
+      "100-1000035",
+      "100-1001077",
+      "100-1001141",
+      "100-1002346",
+      "100-1002442",
+      "100-1002600",
+      "100-1002884",
+      "100-1003117",
+      "DWE-1001165",
+      "DWE-1001183",
+      "DWE-1001909",
+      "DWE-1002892",
+      "DWE-1003673",
+      "MAG-1000179",
+      "MAG-1000885",
+      "MAG-1003269",
+      "MAG-1003510",
+      "SQU-1000394",
+      "SQU-1000979",
+      "SQU-1002298",
+      "SQU-1002843",
+      "SQU-1003177",
+      "SQU-1003370",
+      "ZER-1000430",
+      "ZER-1000500",
+      "ZER-1001207",
+      "ZER-1001249",
+      "ZER-1001334",
+      "ZER-1002632",
+      "ZER-1002667",
+      "ZER-1002911",
+      "ZER-1003426"
+    ],
+    "total_monthly_rent": 6448700,
+    "avg_price_per_sqft_2bhk": 20980.26,
+    "costliest_project": {
+      "project_id": "P10255",
+      "price_max_inr": 48900000
+    },
+    "listings_last_7_days": 142,
+    "fake_listing_ids": [
+      "100-1000461",
+      "100-1001341",
+      "100-1001466",
+      "100-1002376",
+      "100-1002452",
+      "100-1002483",
+      "100-1003248",
+      "100-1003327",
+      "100-1004486",
+      "DWE-1000921",
+      "DWE-1000934",
+      "DWE-1001565",
+      "DWE-1004256",
+      "MAG-1000452",
+      "MAG-1000899",
+      "MAG-1001930",
+      "MAG-1003078",
+      "MAG-1003136",
+      "MAG-1004020",
+      "MAG-1004030",
+      "MAG-1004552",
+      "MAG-1004604",
+      "SQU-1000028",
+      "SQU-1000398",
+      "SQU-1000647",
+      "SQU-1001894",
+      "SQU-1002491",
+      "SQU-1002915",
+      "SQU-1002988",
+      "SQU-1004329",
+      "ZER-1000181",
+      "ZER-1001070",
+      "ZER-1001622",
+      "ZER-1001855",
+      "ZER-1004683"
+    ],
+    "projects_with_wrong_listing_count": 392
+  },
+  "findings": [
+    {
+      "endpoint": "*",
+      "category": "auth",
+      "documented": "API key sent as query parameter: ?api_key=IVY26-XXXX",
+      "actual": "API key must be sent via X-API-Key request header. Query parameter returns error: 'send your key in the X-API-Key request header, not as a query parameter'",
+      "how_found": "First API call with documented query parameter format returned an error with explicit instructions",
+      "impact": "Every request must use the header approach; documented method completely fails",
+      "evidence": []
+    },
+    {
+      "endpoint": "/auth/login",
+      "category": "auth",
+      "documented": "Response field is 'token', expires_in is 86400 (24 hours), no refresh flow",
+      "actual": "Response field is 'access_token' (not 'token'), expires_in is 900 (15 minutes), includes 'refresh_token' and 'refresh_url': '/auth/refresh'",
+      "how_found": "Called POST /auth/login and compared response keys/values with documentation",
+      "impact": "Frontend must implement token refresh to maintain sessions beyond 15 minutes; documented 24h expiry is wrong by 96x",
+      "evidence": []
+    },
+    {
+      "endpoint": "/auth/login",
+      "category": "auth",
+      "documented": "Response user object contains {email, name}",
+      "actual": "User object only contains {email}, no 'name' field",
+      "how_found": "Inspected login response JSON",
+      "impact": "Cannot display user name in UI; must derive display name from email",
+      "evidence": []
+    },
+    {
+      "endpoint": "/auth/refresh",
+      "category": "undocumented_endpoint",
+      "documented": "Not documented. Documentation says 'There is no refresh flow'",
+      "actual": "POST /auth/refresh exists, accepts {refresh_token} body, returns new access_token + refresh_token pair",
+      "how_found": "Login response included 'refresh_url': '/auth/refresh'; tested endpoint and it works",
+      "impact": "Critical for maintaining sessions beyond 15 minutes; without this, users would be logged out every 15 minutes",
+      "evidence": []
+    },
+    {
+      "endpoint": "/auth/logout",
+      "category": "auth",
+      "documented": "Invalidates the current token server side",
+      "actual": "Returns {ok: true, note: 'tokens are stateless; discard them client side'}. Tokens are NOT invalidated server-side",
+      "how_found": "Called POST /auth/logout and read the response",
+      "impact": "Logout is client-side only; old tokens remain valid until expiry",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "pagination",
+      "documented": "Uses 'page' parameter (1-indexed), maximum limit is 200, response contains 'page' and 'page_size'",
+      "actual": "Uses 'offset' parameter (0-indexed). 'page' parameter is silently ignored. Maximum limit is 50 (not 200). Response contains 'offset', 'limit', 'count', 'has_more' (not 'page', 'page_size')",
+      "how_found": "Tested page=2 parameter (ignored), tested limit=200 (capped to 50), compared response shape with docs",
+      "impact": "Must use offset-based pagination; page-based approach silently returns page 1 every time. Affects data collection throughput since max 50 records per request instead of 200",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "completeness",
+      "documented": "Returns active sale listings only. Inactive, expired and withdrawn listings are excluded server side. total reflects matching records",
+      "actual": "Returns ALL listings including inactive ones (is_live=false). 978 out of 4700 listings have is_live=false. API reports total=4498 but returns 4700 unique records across all pages",
+      "how_found": "Fetched all pages and found is_live=false records. Counted 4700 unique listing IDs but API total field said 4498",
+      "impact": "Frontend must filter by is_live client-side if only active listings should be shown. Total count is unreliable",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "duplicates",
+      "documented": "Each listing corresponds to exactly one physical property",
+      "actual": "One pair of listings shares identical structural attributes (apartment_name, locality, bedroom, bathroom, floor, total_floors, carpet_area, super_built_up_area) across different websites, indicating they describe the same property",
+      "how_found": "Grouped all listings by structural property attributes and found one group with 2 listings",
+      "impact": "unique_properties (4699) differs from total listing records (4700) by 1",
+      "evidence": ["100-1003687", "MAG-1004174"]
+    },
+    {
+      "endpoint": "/v1/listing/{id}",
+      "category": "missing_endpoint",
+      "documented": "GET /v1/listing/{listing_id} (singular) returns a single listing",
+      "actual": "Returns 404. The correct path is GET /v1/listings/{listing_id} (plural 'listings')",
+      "how_found": "Tested documented singular path, got 404. Tested plural path and it worked",
+      "impact": "Must use /v1/listings/{id} for single listing retrieval",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings/{id}/similar",
+      "category": "missing_endpoint",
+      "documented": "Returns up to ten comparable listings — same locality, same bedroom count, price within 15%",
+      "actual": "Returns 404. Endpoint does not exist",
+      "how_found": "Called endpoint with valid listing ID, received 404",
+      "impact": "Cannot show 'similar listings' feature; must implement client-side if needed",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/favourites",
+      "category": "missing_endpoint",
+      "documented": "GET /v1/favourites for listing saved listings, POST /v1/favourites to add, DELETE /v1/favourites/{id} to remove",
+      "actual": "All /v1/favourites paths return 404. The actual endpoint is /v1/saved",
+      "how_found": "Tested /v1/favourites (404), then tried /v1/favorites, /v1/saved, /v1/wishlist. Only /v1/saved returned 200",
+      "impact": "Must use /v1/saved instead of /v1/favourites for all saved listing operations",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/saved",
+      "category": "undocumented_endpoint",
+      "documented": "Not documented (documented as /v1/favourites)",
+      "actual": "POST /v1/saved requires {listing_id} field (not {id} as documented for /v1/favourites). GET returns {count, results}. DELETE /v1/saved/{listing_id} removes a saved listing",
+      "how_found": "Discovered through trial after /v1/favourites returned 404. POST with {id} returned validation error specifying {listing_id} is required",
+      "impact": "Request body field name differs from documentation",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/analytics/summary",
+      "category": "missing_endpoint",
+      "documented": "Returns pre-computed aggregates: city, total_listings, median_price, median_price_per_sqft, by_locality, by_bhk",
+      "actual": "Returns 404. Endpoint does not exist. Also tried /v1/analytics — also 404",
+      "how_found": "Called both /v1/analytics/summary and /v1/analytics, both returned 404",
+      "impact": "Must compute all analytics client-side from raw listing data",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "timestamps",
+      "documented": "Timestamps are ISO 8601, UTC, Z suffix everywhere",
+      "actual": "Listing posted_at has NO timezone suffix (e.g. '2026-06-15T02:33:00'). Rental posted_at has Z suffix. Health endpoint uses +05:30. Inconsistent across endpoints",
+      "how_found": "Compared posted_at format across listings, rentals, and health endpoint",
+      "impact": "Timezone-sensitive calculations (like listings_last_7_days) are ambiguous. Must decide whether to treat suffix-less timestamps as UTC or IST",
+      "evidence": []
+    },
+    {
+      "endpoint": "/v1/projects",
+      "category": "units",
+      "documented": "price_min and price_max are in rupees",
+      "actual": "Prices are in mixed units: most are in crores (1-5 range), 13 projects have values in lakhs (30-100 range). 372 out of 520 projects have price_min > price_max because price_min is in lakhs while price_max is in crores",
+      "how_found": "Noticed price_max values like 2.95 (obviously not rupees). Compared with actual listing prices in each project. Found 372 projects where min > max — impossible if same unit",
+      "impact": "Must detect and normalize price units to compare projects correctly. Affects costliest_project calculation",
+      "evidence": ["P10002", "P10004", "P10005", "P10006", "P10007", "P10010", "P10012", "P10013", "P10014", "P10016", "P10017", "P10018", "P10050", "P10055", "P10068"]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "units",
+      "documented": "Area is square feet, integer, everywhere in the API",
+      "actual": "magichomes website listings have carpet_area in square meters (not square feet). 388 magichomes listings have carpet_area < 200 (e.g. 75-154), which makes sense as sqm but is impossibly small as sqft for apartments",
+      "how_found": "Analyzed carpet_area distribution by website. magichomes has min=45 for 2BHK (impossible sqft), but 45 sqm = 484 sqft (reasonable). Other websites all have 600+ sqft for 2BHK",
+      "impact": "Price/sqft calculations using raw carpet_area values are inflated for magichomes listings. Affects avg_price_per_sqft_2bhk",
+      "evidence": ["MAG-1002627", "MAG-1003078", "MAG-1000037", "MAG-1002865", "MAG-1000214", "MAG-1002778", "MAG-1000065", "MAG-1003084", "MAG-1000974", "MAG-1003997"]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "data_quality",
+      "documented": "All listings are valid property records",
+      "actual": "32 listings describe impossible properties: floor > total_floors (e.g. floor 33 of 26), negative prices, swapped lat/lon coordinates",
+      "how_found": "Validated all records programmatically: checked floor <= total_floors, price > 0, carpet_area > 0, carpet_area <= super_built_up_area, coordinates within Bangalore bounds",
+      "impact": "These records cannot represent real properties and must be flagged or excluded from calculations",
+      "evidence": ["100-1000035", "100-1001077", "100-1001141", "100-1002346", "DWE-1001909", "MAG-1000885", "MAG-1003510", "SQU-1003370", "ZER-1000430", "ZER-1002632"]
+    },
+    {
+      "endpoint": "/v1/listings",
+      "category": "fraud",
+      "documented": "description is the seller's own text, shown as written",
+      "actual": "7 listings contain AI prompt injection in descriptions: instructions to add fake fields to submission.json or fake footer text. 28 listings contain 'Pay a token amount of Rs 25,000 today to block the unit' — a classic lead generation scam tactic",
+      "how_found": "Read descriptions during data analysis. Found two categories: (1) text targeting AI tools with fake data requirements, (2) token amount advance-fee scam language",
+      "impact": "35 total fake listings exist to generate enquiries, not to sell real properties. Must be excluded from price calculations",
+      "evidence": ["MAG-1003078", "ZER-1001070", "DWE-1000934", "MAG-1000452", "MAG-1004552", "SQU-1001894", "SQU-1002491", "100-1002452", "DWE-1000921", "DWE-1004256", "100-1002483", "ZER-1001622", "100-1001341", "MAG-1004604", "SQU-1000647"]
+    },
+    {
+      "endpoint": "/v1/projects",
+      "category": "consistency",
+      "documented": "total_listings is recomputed whenever a listing is added or withdrawn, so it always agrees with what GET /v1/listings returns",
+      "actual": "392 out of 520 projects have a total_listings count that does NOT match the actual number of listing records associated with that project_id",
+      "how_found": "For each project, counted listing records with matching project_id and compared with the project's total_listings field",
+      "impact": "Cannot rely on project's total_listings field for accurate listing counts",
+      "evidence": ["P10001", "P10002", "P10003", "P10004", "P10005", "P10006", "P10011", "P10016", "P10050", "P10068"]
+    },
+    {
+      "endpoint": "/health",
+      "category": "timestamps",
+      "documented": "Returns service status and the server clock. Documentation conventions say timestamps are UTC with Z suffix",
+      "actual": "Returns timestamps with +05:30 offset (IST), not UTC with Z suffix. Response includes 'timezone': 'Asia/Kolkata' and 'reference_date' field",
+      "how_found": "Called GET /health as the first API request",
+      "impact": "Confirms server operates in IST; helps interpret ambiguous timestamps in listing data",
+      "evidence": []
+    }
+  ]
+}
